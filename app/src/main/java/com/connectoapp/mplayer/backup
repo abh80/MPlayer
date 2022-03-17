@@ -1,0 +1,230 @@
+
+      findViewById(R.id.apply).setOnClickListener(l -> {
+            TextInputEditText t = findViewById(R.id.bass);
+            if (!Objects.requireNonNull(t.getText()).toString().equals("")) {
+                bass = Integer.parseInt(t.getText().toString());
+            }
+            TextInputEditText v = findViewById(R.id.freq);
+            if (!Objects.requireNonNull(v.getText()).toString().equals("")) {
+                freq = Integer.parseInt(v.getText().toString());
+            }
+            if (mp != null) {
+                final int currentState = mp.getCurrentPosition();
+                if (filePath != null) {
+                    loadAudio(currentState * (freq / baseFreq));
+
+                }
+            }
+        });
+        mSeekBar = findViewById(R.id.seekBar);
+        mSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                if (mp != null && b) {
+                    mp.seekTo(i * 1000);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+        findViewById(R.id.button2).setOnClickListener(l -> {
+            playAudio();
+        });
+        findViewById(R.id.button3).setOnClickListener(l -> {
+            pauseAudio();
+        });
+        findViewById(R.id.button_select).setOnClickListener(l -> {
+            Intent intent = new Intent();
+            intent.setAction(Intent.ACTION_GET_CONTENT);
+            intent.setType("audio/mpeg");
+            intent = Intent.createChooser(intent, "Choose an audio");
+            startActivityForResult(intent, 1);
+        });
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == 1) {
+            if (resultCode == Activity.RESULT_OK) {
+                filePath = data.getData();
+
+                loadAudio();
+            }
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (mp != null) {
+            mp.stop();
+        }
+    }
+
+    private void loadAudio(int time) {
+        try {
+            InputStream inputStream = getContentResolver().openInputStream(filePath);
+            if (inputStream == null)
+                return;
+            OutputStream outputStream = new FileOutputStream(getApplicationInfo().dataDir + "/test.mp3");
+            byte[] buf = new byte[1024];
+            int len;
+            while ((len = inputStream.read(buf)) > 0)
+                outputStream.write(buf, 0, len);
+            outputStream.close();
+            inputStream.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        String af = "";
+        if (bass > 0) {
+            af += "bass=g=" + bass;
+            af += ",dynaudnorm,";
+        }
+        if (freq > 0) {
+            af += "asetrate=" + freq;
+        }
+
+        String cmd = "-i " + getApplicationInfo().dataDir + "/test.mp3 -y ";
+        if (!af.equals("")) {
+            cmd += "-af \"" + af + "\" ";
+        }
+        cmd += getApplicationInfo().dataDir + "/curr.mp3";
+
+        String finalCmd = cmd;
+        new Thread(() -> {
+            int rc = FFmpeg.execute(finalCmd);
+            if (rc == Config.RETURN_CODE_SUCCESS) {
+                Log.i(Config.TAG, "Command execution completed successfully.");
+            } else if (rc == Config.RETURN_CODE_CANCEL) {
+                Log.i(Config.TAG, "Command execution cancelled by user.");
+            } else {
+                Log.i(Config.TAG, String.format("Command execution failed with rc=%d and the output below.", rc));
+                Config.printLastCommandOutput(Log.INFO);
+            }
+            MainActivity.this.runOnUiThread(() -> {
+                if (filePath != null) {
+                    if (mp != null) {
+                        mp.stop();
+                        mp = null;
+                    }
+                    try {
+                        mp = new MediaPlayer();
+                        mp.setDataSource(getApplicationInfo().dataDir + "/curr.mp3");
+                        mp.setAudioStreamType(AudioManager.STREAM_MUSIC);
+                        mp.prepare();
+                        isPrepared = true;
+                        playAudio();
+                        mp.seekTo(time);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }).start();
+
+    }
+
+    private void loadAudio() {
+        try {
+            InputStream inputStream = getContentResolver().openInputStream(filePath);
+            if (inputStream == null)
+                return;
+            OutputStream outputStream = new FileOutputStream(getApplicationInfo().dataDir + "/test.mp3");
+            byte[] buf = new byte[1024];
+            int len;
+            while ((len = inputStream.read(buf)) > 0)
+                outputStream.write(buf, 0, len);
+            outputStream.close();
+            inputStream.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        String af = "";
+        if (bass > 0) {
+            af += "bass=g=" + bass;
+            af += ",dynaudnorm,";
+        }
+        if (freq > 0) {
+            af += "asetrate=" + freq;
+        }
+
+        String cmd = "-i " + getApplicationInfo().dataDir + "/test.mp3 -y ";
+        if (!af.equals("")) {
+            cmd += "-af \"" + af + "\" ";
+        }
+        cmd += getApplicationInfo().dataDir + "/curr.mp3";
+
+        String finalCmd = cmd;
+        new Thread(() -> {
+            int rc = FFmpeg.execute(finalCmd);
+            if (rc == Config.RETURN_CODE_SUCCESS) {
+                Log.i(Config.TAG, "Command execution completed successfully.");
+            } else if (rc == Config.RETURN_CODE_CANCEL) {
+                Log.i(Config.TAG, "Command execution cancelled by user.");
+            } else {
+                Log.i(Config.TAG, String.format("Command execution failed with rc=%d and the output below.", rc));
+                Config.printLastCommandOutput(Log.INFO);
+            }
+            MainActivity.this.runOnUiThread(() -> {
+                if (filePath != null) {
+                    if (mp != null) {
+                        mp.stop();
+                        mp = null;
+                    }
+                    try {
+                        mp = new MediaPlayer();
+                        mp.setDataSource(getApplicationInfo().dataDir + "/curr.mp3");
+                        mp.setAudioStreamType(AudioManager.STREAM_MUSIC);
+                        mp.prepareAsync();
+                        isPrepared = true;
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }).start();
+
+    }
+
+    private final Handler mHandler = new Handler();
+
+    private void playAudio() {
+        if (mp != null && !mp.isPlaying()) {
+            if (!isPrepared) {
+                Snackbar.make(findViewById(R.id.main), "The audio is yet being loaded pls try again.", Snackbar.LENGTH_LONG).show();
+                return;
+            }
+            mp.start();
+
+            MainActivity.this.runOnUiThread(new Runnable() {
+
+                @Override
+                public void run() {
+
+                    if (mp != null) {
+                        int mCurrentPosition = mp.getCurrentPosition() / 1000;
+                        mSeekBar.setProgress(mCurrentPosition);
+                    }
+                    mHandler.postDelayed(this, 1000);
+                }
+            });
+        }
+    }
+
+    private void pauseAudio() {
+        if (mp != null && mp.isPlaying()) {
+            mp.pause();
+        }
+    }
+}
